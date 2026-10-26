@@ -1,0 +1,8 @@
+{
+  "name": "SmartMenu SaaS Builder",
+  "description": "A high-performance multi-tenant digital menu platform with AI-powered descriptions, QR code generation, and interactive media sliders for restaurants.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": []
+}

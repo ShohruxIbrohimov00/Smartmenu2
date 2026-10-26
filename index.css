@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html {
+  /* scrollbar paydo bo'lganda sahifa yon tomonga siljimasligi uchun */
+  scrollbar-gutter: stable;
+  -webkit-text-size-adjust: 100%;
+}
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: #f8fafc;
+  margin: 0;
+  overflow-anchor: none;
+}
+img { max-width: 100%; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
