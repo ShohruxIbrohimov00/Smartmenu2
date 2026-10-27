@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { onImgError } from '../assets';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Cafe, Category, MenuItem, TableCall, Order, CustomerProfile } from '../types';
@@ -336,37 +337,50 @@ const PublicMenu: React.FC<PublicMenuProps> = ({
     setTimeout(() => setFeedbackMessage(null), 3000);
   };
 
-  // Spin Wheel function
+  // Omad barabani: nishon tanlangan sektorning aynan o'rtasiga kelib to'xtaydi.
   const spinWheel = () => {
     if (isSpinning || profile.freeSpins <= 0) return;
 
     setIsSpinning(true);
     setWonPrize(null);
 
-    // Random target index (0 to 5)
     const prizeIndex = Math.floor(Math.random() * WHEEL_PRIZES.length);
     const selectedPrize = WHEEL_PRIZES[prizeIndex];
-
-    // Compute rotation: extra spins (5-8 full spins) + angle to target
     const segmentAngle = 360 / WHEEL_PRIZES.length;
-    const targetOffset = 360 - (prizeIndex * segmentAngle) - (segmentAngle / 2);
-    const extraRotations = 360 * 6; // 6 full circles
-    const totalRotation = wheelRotation + extraRotations + targetOffset;
+    const currentAngle = ((wheelRotation % 360) + 360) % 360;
+    // Sektorlar yuqoridagi ko'rsatkichdan soat yo'nalishi bo'yicha hisoblanadi.
+    const prizeCenterAngle = (prizeIndex + 0.5) * segmentAngle;
+    const alignment = (360 - ((currentAngle + prizeCenterAngle) % 360)) % 360;
+    const extraRotations = 360 * 7;
+    const totalRotation = wheelRotation + extraRotations + alignment;
 
     setWheelRotation(totalRotation);
 
-    setTimeout(() => {
+    // CSS animatsiya davomiyligi bilan bir xil bo'lishi kerak.
+    window.setTimeout(() => {
       setIsSpinning(false);
       setWonPrize(selectedPrize);
       setProfile(prev => ({
         ...prev,
-        freeSpins: prev.freeSpins - 1,
-        cashbackBalance: selectedPrize.type === 'cashback' 
-          ? prev.cashbackBalance + (selectedPrize.value as number) 
+        freeSpins: Math.max(0, prev.freeSpins - 1),
+        cashbackBalance: selectedPrize.type === 'cashback'
+          ? prev.cashbackBalance + (selectedPrize.value as number)
           : prev.cashbackBalance
       }));
-    }, 4000);
+    }, 5400);
   };
+
+  // Kafe topilmagan holatni xavfsiz boshqarish.
+  if (!activeCafe) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6 text-center">
+        <div>
+          <h1 className="text-lg font-bold text-slate-900">Kafe topilmadi</h1>
+          <p className="mt-2 text-sm text-slate-500">Havolani tekshirib, qayta urinib ko'ring.</p>
+        </div>
+      </div>
+    );
+  }
 
   const tableList = Array.from({ length: activeCafe.tablesCount || 15 }, (_, i) => (i + 1).toString());
 
@@ -668,97 +682,118 @@ const PublicMenu: React.FC<PublicMenuProps> = ({
             </div>
 
             {/* Lucky Wheel (Omad Barabani) Section */}
-            <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-sm space-y-4 text-center">
-              <div>
-                <div className="inline-flex items-center gap-1.5 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider mb-2">
-                  <Sparkles className="w-3.5 h-3.5" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-orange-100 bg-gradient-to-b from-white via-orange-50/40 to-amber-50/70 p-5 text-center shadow-[0_18px_55px_-28px_rgba(234,88,12,0.35)] sm:p-7">
+              <div className="pointer-events-none absolute -right-12 -top-14 h-36 w-36 rounded-full bg-amber-200/30 blur-2xl" />
+              <div className="pointer-events-none absolute -bottom-16 -left-10 h-40 w-40 rounded-full bg-orange-200/30 blur-2xl" />
+
+              <div className="relative z-10">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full border border-orange-200 bg-white/90 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.16em] text-orange-700 shadow-sm">
+                  <Sparkles className="h-3.5 w-3.5" />
                   <span>Omad Barabani</span>
                 </div>
-                <h3 className="text-base font-black text-slate-900">Yutuqli O'yinda Qatnashing!</h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-xs mx-auto">
-                  200 000 so'mdan ortiq har bir buyurtmangiz uchun 1 ta bepul aylantirish (Spin) taqdim etiladi.
+                <h3 className="text-lg font-black tracking-tight text-slate-900">Omadingizni sinab ko'ring!</h3>
+                <p className="mx-auto mt-1.5 max-w-xs text-xs leading-relaxed text-slate-500">
+                  200 000 so'mdan ortiq har bir buyurtma uchun 1 ta bepul aylantirish.
                 </p>
               </div>
 
-              {/* Free spins badge */}
-              <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-2xl bg-slate-900 text-white text-xs font-bold">
-                <RotateCw className={`w-3.5 h-3.5 text-orange-400 ${isSpinning ? 'animate-spin' : ''}`} />
-                <span>Mavjud urinishlar: <strong className="text-orange-400 font-mono text-sm">{profile.freeSpins} ta</strong></span>
+              <div className="relative z-10 mt-4 inline-flex items-center gap-2 rounded-full border border-slate-800/10 bg-slate-950 px-4 py-2 text-xs font-semibold text-white shadow-md">
+                <RotateCw className={`h-4 w-4 text-amber-400 ${isSpinning ? 'animate-spin' : ''}`} />
+                <span>Qolgan urinish:</span>
+                <strong className="font-mono text-sm text-amber-300">{profile.freeSpins}</strong>
               </div>
 
-              {/* Visual Wheel Frame */}
-              <div className="relative w-64 h-64 mx-auto my-4 flex items-center justify-center">
-                {/* Pointer / Arrow at top */}
-                <div className="absolute top-[-8px] z-20 w-0 h-0 border-l-[12px] border-l-transparent border-r-[12px] border-r-transparent border-t-[20px] border-t-amber-500 drop-shadow-md" />
+              {/* Haqiqiy sektor ko'rinishidagi, silliq aylanadigan baraban */}
+              <div className="relative mx-auto my-6 flex h-[304px] w-[304px] max-w-full items-center justify-center">
+                <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-200 via-orange-500 to-amber-700 shadow-[0_16px_32px_-12px_rgba(124,45,18,0.55)]" />
+                <div className="absolute inset-[5px] rounded-full border border-white/70" />
 
-                {/* Rotating Wheel Canvas */}
-                <div 
+                {/* Ko'rsatkich baraban tashqarisida turadi va aylanmaydi */}
+                <div className="absolute left-1/2 top-[-3px] z-30 -translate-x-1/2 drop-shadow-[0_3px_3px_rgba(0,0,0,0.35)]">
+                  <div className="relative h-0 w-0 border-l-[15px] border-r-[15px] border-t-[30px] border-l-transparent border-r-transparent border-t-slate-950" />
+                  <div className="absolute left-1/2 top-[-2px] h-0 w-0 -translate-x-1/2 border-l-[8px] border-r-[8px] border-t-[17px] border-l-transparent border-r-transparent border-t-amber-300" />
+                </div>
+
+                <div
+                  className="relative h-[280px] w-[280px] overflow-hidden rounded-full border-[5px] border-slate-950 shadow-[inset_0_0_0_2px_rgba(255,255,255,0.3)] will-change-transform"
                   style={{
+                    background: `conic-gradient(${WHEEL_PRIZES.map((prize, idx) => `${prize.color} ${idx * (360 / WHEEL_PRIZES.length)}deg ${(idx + 1) * (360 / WHEEL_PRIZES.length)}deg`).join(', ')})`,
                     transform: `rotate(${wheelRotation}deg)`,
-                    transition: isSpinning ? "transform 4s cubic-bezier(0.15, 0.9, 0.2, 1)" : "none"
+                    transition: isSpinning ? 'transform 5.4s cubic-bezier(0.12, 0.78, 0.08, 1)' : 'none'
                   }}
-                  className="w-60 h-60 rounded-full border-4 border-slate-900 shadow-2xl relative overflow-hidden bg-slate-900"
                 >
+                  {/* Sektorlar orasidagi nozik oq chiziqlar */}
                   {WHEEL_PRIZES.map((prize, idx) => {
-                    const angle = (360 / WHEEL_PRIZES.length) * idx;
+                    const angle = (idx * 360) / WHEEL_PRIZES.length;
+                    return (
+                      <div
+                        key={`divider-${prize.id}`}
+                        className="pointer-events-none absolute left-1/2 top-1/2 z-[1] h-1/2 w-px origin-top bg-white/75"
+                        style={{ transform: `rotate(${angle}deg) translateX(-50%)` }}
+                      />
+                    );
+                  })}
+
+                  {WHEEL_PRIZES.map((prize, idx) => {
+                    const segmentAngle = 360 / WHEEL_PRIZES.length;
+                    const midAngle = (idx + 0.5) * segmentAngle;
+                    const radians = (midAngle * Math.PI) / 180;
+                    const radius = 79;
+                    const x = Math.sin(radians) * radius;
+                    const y = -Math.cos(radians) * radius;
                     return (
                       <div
                         key={prize.id}
-                        style={{
-                          transform: `rotate(${angle}deg)`,
-                          transformOrigin: "50% 100%"
-                        }}
-                        className="absolute inset-0 flex justify-center pt-2 text-[10px] font-bold text-white uppercase tracking-tight"
+                        className="pointer-events-none absolute z-[2] flex h-[44px] w-[82px] -translate-x-1/2 -translate-y-1/2 items-center justify-center px-1 text-center text-[9px] font-black leading-[1.15] text-white drop-shadow-[0_1px_2px_rgba(0,0,0,0.6)] sm:text-[10px]"
+                        style={{ left: `calc(50% + ${x}px)`, top: `calc(50% + ${y}px)` }}
                       >
-                        <div 
-                          style={{ backgroundColor: prize.color }}
-                          className="w-24 h-28 rounded-b-2xl pt-2 px-1 text-center shadow-inner opacity-90"
-                        >
-                          <span className="block leading-tight text-white drop-shadow-sm line-clamp-2">
-                            {prize.label}
-                          </span>
-                        </div>
+                        <span>{prize.label}</span>
                       </div>
                     );
                   })}
 
-                  {/* Wheel Center Hub */}
-                  <div className="absolute inset-0 m-auto w-12 h-12 rounded-full bg-slate-900 border-2 border-amber-400 flex items-center justify-center text-white shadow-xl z-10">
-                    <Trophy className="w-5 h-5 text-amber-400" />
+                  {/* Markaziy medal */}
+                  <div className="absolute left-1/2 top-1/2 z-10 flex h-[58px] w-[58px] -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[4px] border-amber-300 bg-gradient-to-br from-slate-800 to-slate-950 text-amber-300 shadow-[0_4px_12px_rgba(0,0,0,0.45)] ring-2 ring-white/80">
+                    <Trophy className="h-6 w-6 drop-shadow" />
                   </div>
                 </div>
               </div>
 
-              {/* Spin Button */}
               <button
+                type="button"
                 onClick={spinWheel}
                 disabled={isSpinning || profile.freeSpins <= 0}
-                className={`w-full py-4 rounded-2xl text-xs font-black uppercase tracking-wider transition-all shadow-lg active:scale-95 ${
-                  profile.freeSpins > 0
-                    ? 'bg-gradient-to-r from-orange-600 via-amber-600 to-orange-600 text-white shadow-orange-500/25 cursor-pointer'
-                    : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none'
+                className={`relative z-10 w-full rounded-2xl px-5 py-4 text-xs font-black uppercase tracking-[0.12em] transition duration-200 focus:outline-none focus-visible:ring-4 focus-visible:ring-orange-300 disabled:cursor-not-allowed active:scale-[0.98] ${
+                  isSpinning
+                    ? 'bg-slate-800 text-white shadow-md'
+                    : profile.freeSpins > 0
+                      ? 'bg-gradient-to-r from-orange-600 via-amber-500 to-orange-600 text-white shadow-[0_10px_24px_-8px_rgba(234,88,12,0.65)] hover:-translate-y-0.5 hover:shadow-[0_14px_28px_-8px_rgba(234,88,12,0.7)]'
+                      : 'bg-slate-200 text-slate-400 shadow-none'
                 }`}
               >
-                {isSpinning 
-                  ? "Baraban aylanmoqda..." 
-                  : profile.freeSpins > 0 
-                  ? "Barabanni Aylantirish (Spin)" 
-                  : "Urinishlar qolmagan (200k+ zakaz qiling)"}
+                <span className="inline-flex items-center justify-center gap-2">
+                  {isSpinning && <RotateCw className="h-4 w-4 animate-spin" />}
+                  {isSpinning
+                    ? "Baraban aylanmoqda..."
+                    : profile.freeSpins > 0
+                      ? "Barabanni aylantirish"
+                      : "Urinishlar qolmagan"}
+                </span>
               </button>
 
-              {/* Won Prize Banner */}
               {wonPrize && (
                 <motion.div
-                  initial={{ scale: 0.9, opacity: 0 }}
-                  animate={{ scale: 1, opacity: 1 }}
-                  className="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-900 text-xs font-bold"
+                  initial={{ y: 8, scale: 0.97, opacity: 0 }}
+                  animate={{ y: 0, scale: 1, opacity: 1 }}
+                  transition={{ duration: 0.28, ease: 'easeOut' }}
+                  className="relative z-10 mt-4 overflow-hidden rounded-2xl border border-amber-300 bg-gradient-to-r from-amber-50 to-orange-50 p-4 text-amber-950 shadow-sm"
+                  role="status"
+                  aria-live="polite"
                 >
-                  🎉 Tabriklaymiz! Siz yutib oldingiz:
-                  <div className="text-base font-black text-orange-600 mt-1">
-                    {wonPrize.label}
-                  </div>
-                  <p className="text-[11px] text-amber-700 mt-0.5">
-                    Yutuq hisobingizga muvaffaqiyatli biriktirildi!
+                  <div className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">🎉 Tabriklaymiz!</div>
+                  <div className="mt-1 text-base font-black text-orange-700">{wonPrize.label}</div>
+                  <p className="mt-1 text-[11px] leading-relaxed text-amber-800">
+                    Yutug'ingiz hisobingizga biriktirildi.
                   </p>
                 </motion.div>
               )}
@@ -1447,53 +1482,86 @@ const PublicMenu: React.FC<PublicMenuProps> = ({
         )}
       </AnimatePresence>
 
-      {/* 5. WI-FI MODAL */}
-      <AnimatePresence>
-        {showWifiModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
+      {/* 5. WI-FI MODAL
+          Ataylab Framer Motion/AnimatePresence ishlatilmayapti:
+          modal faqat bir marta mount bo'ladi va ikki marta animatsiya qilmaydi. */}
+      {showWifiModal &&
+        activeCafe &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="wifi-modal-title"
+          >
+            <button
+              type="button"
+              aria-label="Modalni yopish"
               onClick={() => setShowWifiModal(false)}
-              className="absolute inset-0 bg-black/70 backdrop-blur-xs"
+              className="absolute inset-0 bg-black/70"
             />
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="relative bg-white rounded-3xl max-w-xs w-full p-6 text-center shadow-2xl z-10"
-            >
-              <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 mx-auto mb-3 flex items-center justify-center">
-                <Wifi className="w-6 h-6" />
-              </div>
-              <h3 className="text-base font-black text-slate-900 mb-1">{activeCafe.name} Wi-Fi</h3>
-              <p className="text-xs text-slate-500 mb-4">Restoran mijozlari uchun bepul Wi-Fi</p>
 
-              <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200 text-left text-xs space-y-2 mb-4 font-mono">
-                <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Tarmoq nomi (SSID):</span>
-                  <strong className="text-slate-900 text-sm font-sans">{activeCafe.wifiName}</strong>
-                </div>
-                <div>
-                  <span className="text-slate-400 block text-[10px] uppercase">Parol:</span>
-                  <strong className="text-orange-600 text-sm">{activeCafe.wifiPassword || 'Parolsiz'}</strong>
-                </div>
+            <div className="relative z-10 w-full max-w-xs rounded-3xl bg-white p-6 text-center shadow-2xl">
+              <button
+                type="button"
+                aria-label="Yopish"
+                onClick={() => setShowWifiModal(false)}
+                className="absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-700"
+              >
+                <X className="h-4 w-4" />
+              </button>
+
+              <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                <Wifi className="h-6 w-6" />
               </div>
 
-              <div className="flex gap-2">
+              <h3 id="wifi-modal-title" className="mb-1 text-base font-black text-slate-900">
+                {activeCafe.name} Wi-Fi
+              </h3>
+              <p className="mb-4 text-xs text-slate-500">
+                Restoran mijozlari uchun bepul Wi-Fi
+              </p>
+
+              <div className="mb-4 space-y-3 rounded-2xl border border-slate-200 bg-slate-50 p-3.5 text-left text-xs">
+                <div>
+                  <span className="mb-1 block text-[10px] uppercase text-slate-400">
+                    Tarmoq nomi (SSID)
+                  </span>
+                  <strong className="break-all font-sans text-sm text-slate-900">
+                    {activeCafe.wifiName || 'Wi-Fi nomi kiritilmagan'}
+                  </strong>
+                </div>
+
+                <div>
+                  <span className="mb-1 block text-[10px] uppercase text-slate-400">
+                    Parol
+                  </span>
+                  <strong className="break-all text-sm text-orange-600">
+                    {activeCafe.wifiPassword || 'Parolsiz'}
+                  </strong>
+                </div>
+              </div>
+
+              {activeCafe.wifiPassword ? (
                 <button
+                  type="button"
                   onClick={copyWifiPassword}
-                  className="flex-1 py-2.5 rounded-xl bg-orange-600 text-white text-xs font-bold hover:bg-orange-700 flex items-center justify-center gap-1.5 shadow-md"
+                  className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-orange-600 py-2.5 text-xs font-bold text-white shadow-md hover:bg-orange-700"
                 >
-                  {isCopiedWifi ? <CheckCheck className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {isCopiedWifi ? (
+                    <CheckCheck className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
                   <span>{isCopiedWifi ? 'Nusxalandi!' : 'Parolni nusxalash'}</span>
                 </button>
-              </div>
-            </motion.div>
-          </div>
+              ) : (
+                <p className="text-xs text-slate-500">Ushbu tarmoq parol talab qilmaydi.</p>
+              )}
+            </div>
+          </div>,
+          document.body
         )}
-      </AnimatePresence>
     </div>
   );
 };
